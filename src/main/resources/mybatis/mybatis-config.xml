@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE configuration
+        PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-config.dtd">
+<configuration>
+
+    <settings>
+        <setting name="mapUnderscoreToCamelCase" value="true"/>
+    </settings>
+
+    <typeAliases>
+        <typeAlias type="com.yanhuan.arthas.demo.model.User" alias="User"/>
+        <typeAlias type="com.yanhuan.arthas.demo.model.UserChange" alias="UserChange"/>
+        <typeAlias type="com.yanhuan.arthas.demo.model.condition.UserCondition" alias="UserCondition"/>
+    </typeAliases>
+
+    <!-- 拦截器的配置放在typeAliases后面 -->
+    <plugins>
+        <plugin interceptor="com.yanhuan.arthas.demo.interceptors.SqlInterceptor"></plugin>
+    </plugins>
+
+</configuration>
