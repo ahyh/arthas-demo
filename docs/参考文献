@@ -1,0 +1,8 @@
+《深入理解JVM字节码》
+《Java虚拟机规范 Java SE 8版》
+Arthas官方文档：https://arthas.aliyun.com/doc/
+Arthas github仓库：https://github.com/alibaba/arthas
+Ognl: https://commons.apache.org/proper/commons-ognl/language-guide.html
+JVMTI: https://docs.oracle.com/javase/8/docs/platform/jvmti/jvmti.html
+ASM文档：https://asm.ow2.io/
+Bytekit官网：https://github.com/alibaba/bytekit

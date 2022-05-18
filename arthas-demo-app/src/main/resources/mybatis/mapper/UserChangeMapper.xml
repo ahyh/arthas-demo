@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.share.arthas.demo.dao.UserChangeMapper">
+
+    <resultMap id="BaseResultMap" type="UserChange">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="user_id" property="userId" jdbcType="VARCHAR"/>
+        <result column="type" property="type" jdbcType="INTEGER"/>
+        <result column="old_val" property="oldVal" jdbcType="VARCHAR"/>
+        <result column="new_val" property="newVal" jdbcType="VARCHAR"/>
+        <result column="create_time" property="createTime" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <sql id="allColumnsWithOutId">
+        (user_id,type,old_val,new_val,create_time)
+    </sql>
+
+    <sql id="allColumns">
+        id,user_id,type,old_val,new_val,create_time
+    </sql>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO yh_user_change
+        <include refid="allColumnsWithOutId"/>
+        values (
+        #{userId,jdbcType=VARCHAR},
+        #{type,jdbcType=INTEGER},
+        #{oldVal,jdbcType=VARCHAR},
+        #{newVal,jdbcType=VARCHAR},
+        now()
+        )
+    </insert>
+
+    <select id="listUserChangeByUserId" resultMap="BaseResultMap" parameterType="long">
+        select
+        <include refid="allColumns"/>
+        from yh_user_change
+        where user_id = #{userId}
+    </select>
+
+</mapper>
