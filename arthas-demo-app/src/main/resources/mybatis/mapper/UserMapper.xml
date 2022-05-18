@@ -25,11 +25,11 @@
     <select id="getUserById" resultType="User">
         SELECT
         <include refid="allColumns"/>
-        FROM yh_user WHERE id=#{id,jdbcType=BIGINT}
+        FROM user WHERE id=#{id,jdbcType=BIGINT}
     </select>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO yh_user
+        INSERT INTO user
         <include refid="allColumnsWithOutId"/>
         values (
         #{age,jdbcType=INTEGER},
@@ -46,15 +46,15 @@
     <select id="listAllUsers" resultMap="BaseResultMap">
         select
         <include refid="allColumns"/>
-        from yh_user
+        from user
     </select>
 
     <delete id="delete" parameterType="java.lang.Long">
-        delete from yh_user where id = #{id,jdbcType=BIGINT}
+        delete from user where id = #{id,jdbcType=BIGINT}
     </delete>
 
     <update id="update" parameterType="User">
-        update yh_user
+        update user
         <set>
             <if test="name != null and name != ''">
                 name = #{name,jdbcType=VARCHAR},

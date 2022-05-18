@@ -20,7 +20,7 @@
     </sql>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO yh_user_change
+        INSERT INTO user_change
         <include refid="allColumnsWithOutId"/>
         values (
         #{userId,jdbcType=VARCHAR},
@@ -34,7 +34,7 @@
     <select id="listUserChangeByUserId" resultMap="BaseResultMap" parameterType="long">
         select
         <include refid="allColumns"/>
-        from yh_user_change
+        from user_change
         where user_id = #{userId}
     </select>
 

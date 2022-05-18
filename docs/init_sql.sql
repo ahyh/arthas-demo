@@ -1,5 +1,5 @@
 -- create table user
-CREATE TABLE `yh_user` (
+CREATE TABLE `user` (
   `id` bigint(13) NOT NULL AUTO_INCREMENT,
   `age` int(4) NOT NULL,
   `name` varchar(50) COLLATE utf8_unicode_ci NOT NULL,
@@ -14,7 +14,7 @@ CREATE TABLE `yh_user` (
 
 
 -- create table user_change
-CREATE TABLE `yh_user_change` (
+CREATE TABLE `user_change` (
   `id` bigint(13) NOT NULL AUTO_INCREMENT,
   `user_id` bigint(13) NOT NULL,
   `type` int(4) NOT NULL,
