@@ -445,6 +445,8 @@ Code_attribute {
 
 #### LineNumberTable Attribute
 
+位于Code属性的属性表中，用于确定java源代码文件中由给定的行号所表示的内容，可以理解为由它可以确定源码和字节码之间的对应关系
+
 ```
 LineNumberTable_attribute {
       u2 attribute_name_index;
@@ -459,8 +461,38 @@ LineNumberTable_attribute {
 ```
 
 - attribute_name_index: 属性名索引，占2个字节，指向常量池中CONSTANT_Utf8_info常量，表示属性的名字, 此处对应的常量池的字符串常量" LineNumberTable "
-- attribute_length: 属性长度，占2个字节
+- attribute_length: 属性长度，不包括初始的6个字节
 - line_number_table_length: line_number_table数组大小
 - line_number_table: 包含start_pc（字节码偏移量），line_number（源码行号）两个属性
 
 可见class文件是可以解析出来字节码和行号对应关系的，这也是程序可以debug的原因之一
+
+
+
+#### LocalVariableTable Attribute
+
+位于Code属性的属性表中，调试器在执行方法的过程中可以用它来确定某个局部变量的值
+
+```
+LocalVariableTable_attribute {
+      u2 attribute_name_index;
+      u4 attribute_length;
+      u2 local_variable_table_length;
+      { 
+          u2 start_pc;
+          u2 length;
+          u2 name_index;
+          u2 descriptor_index;
+          u2 index;
+      } local_variable_table[local_variable_table_length];
+}
+```
+
+- attribute_name_index: 属性名名称，指向常量池中CONSTANT_Utf8_info常量，用以表示字符串"LocalVariableTable"
+- attribute_length: 属性长度，不包括初始的6个字节
+- local_variable_table_length：local_variable_table数组的成员数量
+- local_variable_table：局部变量的作用范围和描述符等信息
+  - start_pc和length: 用于确定局部变量的作用域范围
+  - name_index: 指向常量池中CONSTANT_Utf8_info常量，表示局部变量的名称
+  - descriptor_index: 指向常量池中CONSTANT_Utf8_info常量，表示局部变量类型的字段描述符
+  - index: 局部变量在当前栈帧的局部变量表中的索引
