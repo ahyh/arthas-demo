@@ -213,8 +213,12 @@ public class ReturnBinding extends Binding {
 ```
 
 - 判断Location是不是*Return指令对应的Location，不是的话抛出异常
+
 - 判断return的值的类型，如果返回值类型为void，则直接把null放入增强的字节码指令中
+
 - 如果return的值的类型不是void，则从局部变量表中根据index找出返回值，在压入操作数栈中，类似于是写了一行java code, ReturnType var1 = returnValue;
+
+  ​
 
 
 
@@ -343,6 +347,22 @@ public class DefaultInterceptorClassParser implements InterceptorClassParser {
 
 }
 ```
+
+
+
+### 5- InterceptorProcessor
+
+步骤4中InterceptorClassParser解析@At*注解，和@Binding注解后，就可以得到InterceptorProcessor集合，遍历这个集合，调用InterceptorProcessor的process方法就可以完成字节码增强
+
+在进行字节码增强之前，首先需要确定要对哪些方法进行增强，InterceptorProcessor的process目标是根据目标方法创建出来的MethodProcessor对象
+
+5.1- LocationMatcher匹配出来需要进行字节码插桩的Location（比如要在方法退出的时候插桩，那LocationMatcher匹配的位置就行方法Code属性遇到*RETURN命令）
+
+5.2- 根据@At*注解，@Binding注解定义解析出来@Binding集合
+
+5.3- 构建BindingContext
+
+5.4- 对LocationMatcher匹配出来的所有Location，遍历所有@Binding定义，从BindingContext中取出局部变量表，局部变量对应的下标，通过字节码操作的方式完成入栈和出栈（通俗的理解就是通过字节码的方式完成Java Code的编写相同的效果）
 
 
 

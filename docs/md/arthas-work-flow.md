@@ -1,6 +1,14 @@
 # Arthas工作流程
 
-通过curl -O https://arthas.aliyun.com/arthas-boot.jar命令下载arthas-boot.jar或者将arthas-boot.jar这个包手动上传到server后，就可以使用arthas了
+通过
+
+```
+curl -O https://arthas.aliyun.com/arthas-boot.jar
+```
+
+下载arthas-boot.jar或者将arthas-boot.jar这个包手动上传到server后，就可以使用arthas了
+
+arthas工作的流程如下：
 
 ## 1- 启动arthas boot
 
@@ -26,7 +34,7 @@
   C:\work\javaEnv\jdk8\jre\..\bin\java.exe -Xbootclasspath/a:C:\work\javaEnv\jdk8_181\jre\..\lib\tools.jar, -jar, C:\Users\yanhuan\.arthas\lib\3.6.1\arthas\arthas-core.jar, -pid, 12336, -core, C:\Users\yanhuan\.arthas\lib\3.6.1\arthas\arthas-core.jar, -agent, C:\Users\yanhuan\.arthas\lib\3.6.1\arthas\arthas-agent.jar
   ```
 
-  命令里面指定了pid, core, agent参数
+  这个命令里面指定了pid, core, agent参数
 
 - 反射执行TelnetConsole.main，启动Telnet客户端
 
@@ -34,11 +42,48 @@
 
 ## 2- 启动arthas-core
 
-在执行arthas-boot包下Bootstrap.main方法的时候，通过java -jar命令的方式启动arthas-core.jar，参数里面带pid, core, agent参数，会执行到arthas-core.jar的mainClass的main方法，也就是Arthas.main方法
+在执行arthas-boot包下Bootstrap.main方法的时候，通过java -jar命令的方式启动arthas-core.jar，参数里面带pid, core, agent参数，因为agent参数arthas-agent.jar，所以会先执行arthas-agent模块配置的Premain-Class的permain方法
+
+```
+<manifestEntries>
+	<Premain-Class>com.taobao.arthas.agent334.AgentBootstrap</Premain-Class>
+	<Agent-Class>com.taobao.arthas.agent334.AgentBootstrap</Agent-Class>
+	<Can-Redefine-Classes>true</Can-Redefine-Classes>
+	<Can-Retransform-Classes>true</Can-Retransform-Classes>
+	<Specification-Title>${project.name}</Specification-Title>
+	<Specification-Version>${project.version}</Specification-Version>
+	<Implementation-Title>${project.name}</Implementation-Title>
+	<Implementation-Version>${project.version}</Implementation-Version>
+</manifestEntries>
+```
+
+```
+public static void premain(String args, Instrumentation inst) {
+	main(args, inst);
+}
+```
+
+premain方法的核心逻辑：另起一个线程执行bind方法，也就是异步执行ArthasBootstrap.getInstance()
+
+```
+private static void bind(Instrumentation inst, ClassLoader agentLoader, String args) throws Throwable {
+	Class<?> bootstrapClass = agentLoader.loadClass(ARTHAS_BOOTSTRAP);
+	Object bootstrap = bootstrapClass.getMethod(GET_INSTANCE, Instrumentation.class, String.class).invoke(null, inst, args);
+	boolean isBind = (Boolean) bootstrapClass.getMethod(IS_BIND).invoke(bootstrap);
+	if (!isBind) {
+		String errorMsg = "Arthas server port binding failed! Please check $HOME/logs/arthas/arthas.log for more details.";
+		ps.println(errorMsg);
+		throw new RuntimeException(errorMsg);
+	}
+	ps.println("Arthas server already bind.");
+}
+```
+
+premain方法执行完成后，开始执行arhtas-core模块下Main-Class的main方法，也就是Arthas.main方法
 
 在Arthas.main方法中通过attach API来attach到目标JVM进程，然后执行loadAgent方法，来动态的加载agent jar
 
-```
+```java
 virtualMachine = VirtualMachine.attach("" + configure.getJavaPid());
 // ......
 String arthasAgentPath = configure.getArthasAgent();
@@ -53,7 +98,13 @@ try {
 }
 ```
 
-loadAgent加载的agent jar就是arthas-agent.jar
+loadAgent加载的agent jar就是arthas-agent.jar，写在域套接字里面的命令如下
+
+```
+load instrument false {core jar path}/arthas-agent.jar {config properties}
+```
+
+目标JVM进程监听域套接字文件，收到load instrument命令后，可以执行Agent-Class的agentmain方法
 
 
 
@@ -74,12 +125,25 @@ arthas-agent模块中的pom.xml中定义了Agent-Class
 </manifestEntries>
 ```
 
-Agent-Class是com.taobao.arthas.agent334.AgentBootstrap，那接下来就会执行到AgentBootstrap的agentmain方法，主要完成以下工作：
+Agent-Class是com.taobao.arthas.agent334.AgentBootstrap，那接下来就会执行到AgentBootstrap的agentmain方法
+
+```
+public static void agentmain(String args, Instrumentation inst) {
+    main(args, inst);
+}
+```
+
+和premain方法的执行逻辑是一样的，主要完成以下工作：
 
 - 加载arthas-spy.jar下java.arthas.SpyAPI，这个类定义了字节码增强逻辑
+
 - 创建ArthasClassloader，用于加载arthas-core.jar里面的类
+
 - 用创建的ArthasClassloader加载ArthasBootstrap(com.taobao.arthas.core.server.ArthasBootstrap)
-- 反射执行ArthasBootstrap.getInstance方法
+
+- 反射执行ArthasBootstrap.getInstance方法，ArthasBootstrap是单例的，第二次执行的时候直接返回
+
+  ​
 
 
 
@@ -88,12 +152,110 @@ Agent-Class是com.taobao.arthas.agent334.AgentBootstrap，那接下来就会执�
 ArthasBootstrap位置arthas-core.jar中，ArthasBootstrap是一个全局单例的对象，在第一次执行getInstance的时候，会执行ArthasBootstrap的构造器方法，这个构造器方法主要完成以下功能：
 
 - 初始化arthas environment，加一些配置信息封装起来（arthas.properties）
+
 - 创建arthas-output目录，后续可以存放增强后的class文件
+
 - 创建一个ShellServer
+
 - 创建BuiltinCommandPack对象，这个对象实现了CommandResolver，后续用于解析用户输入的命令，BuiltinCommandPack里面维护了一个Command集合，每个Command对象都对应一种支持的Arthas命令，Command对象里面同时也封装了处理这个Arthas命令的Handler，即AnnotatedCommandImpl的内部类ProcessHandler, 将BuildinCommandPack维护到ShellServer中
+
+  ```
+   BuiltinCommandPack builtinCommands = new BuiltinCommandPack(disabledCommands);
+   List<CommandResolver> resolvers = new ArrayList<CommandResolver>();
+   resolvers.add(builtinCommands);
+  ```
+
+  ```
+   public BuiltinCommandPack(List<String> disabledCommands) {
+  	initCommands(disabledCommands);
+  }
+
+  @Override
+  public List<Command> commands() {
+  	return commands;
+  }
+
+  private void initCommands(List<String> disabledCommands) {
+  	List<Class<? extends AnnotatedCommand>> commandClassList = new ArrayList<Class<? extends AnnotatedCommand>>(32);
+  	commandClassList.add(HelpCommand.class);
+  	commandClassList.add(AuthCommand.class);
+  	commandClassList.add(KeymapCommand.class);
+  	commandClassList.add(SearchClassCommand.class);
+  	commandClassList.add(SearchMethodCommand.class);
+  	commandClassList.add(ClassLoaderCommand.class);
+  	commandClassList.add(JadCommand.class);
+  	commandClassList.add(GetStaticCommand.class);
+  	commandClassList.add(MonitorCommand.class);
+  	commandClassList.add(StackCommand.class);
+  	commandClassList.add(ThreadCommand.class);
+  	commandClassList.add(TraceCommand.class);
+  	commandClassList.add(WatchCommand.class);
+  	commandClassList.add(TimeTunnelCommand.class);
+  	commandClassList.add(JvmCommand.class);
+  	commandClassList.add(MemoryCommand.class);
+  	commandClassList.add(PerfCounterCommand.class);
+  	// commandClassList.add(GroovyScriptCommand.class);
+  	commandClassList.add(OgnlCommand.class);
+  	commandClassList.add(MemoryCompilerCommand.class);
+  	commandClassList.add(RedefineCommand.class);
+  	commandClassList.add(RetransformCommand.class);
+  	commandClassList.add(DashboardCommand.class);
+  	commandClassList.add(DumpClassCommand.class);
+  	commandClassList.add(HeapDumpCommand.class);
+  	commandClassList.add(JulyCommand.class);
+  	commandClassList.add(ThanksCommand.class);
+  	commandClassList.add(OptionsCommand.class);
+  	commandClassList.add(ClsCommand.class);
+  	commandClassList.add(ResetCommand.class);
+  	commandClassList.add(VersionCommand.class);
+  	commandClassList.add(SessionCommand.class);
+  	commandClassList.add(SystemPropertyCommand.class);
+  	commandClassList.add(SystemEnvCommand.class);
+  	commandClassList.add(VMOptionCommand.class);
+  	commandClassList.add(LoggerCommand.class);
+  	commandClassList.add(HistoryCommand.class);
+  	commandClassList.add(CatCommand.class);
+  	commandClassList.add(Base64Command.class);
+  	commandClassList.add(EchoCommand.class);
+  	commandClassList.add(PwdCommand.class);
+  	commandClassList.add(MBeanCommand.class);
+  	commandClassList.add(GrepCommand.class);
+  	commandClassList.add(TeeCommand.class);
+  	commandClassList.add(ProfilerCommand.class);
+  	commandClassList.add(VmToolCommand.class);
+  	commandClassList.add(StopCommand.class);
+
+  	for (Class<? extends AnnotatedCommand> clazz : commandClassList) {
+  		Name name = clazz.getAnnotation(Name.class);
+  		if (name != null && name.value() != null) {
+  			if (disabledCommands.contains(name.value())) {
+  				continue;
+  			}
+  		}
+  		commands.add(Command.create(clazz));
+  	}
+  }
+  ```
+
+  所以如果想要自定义一个命令，这里要把自定义命令加上commands里面，后续就可以识别出来了
+
 - 创建HttpTelnetTermServer & HttpTermServer并设置termHandler为TermServerTermHandler，将两个Server维护到ShellServer中，启动这两个Server，开始监听客户端输入
+
 - 创建一个ScheduledThreadPool来处理Arthas Command, 至此可以开始处理Arthas客户端输入的命令了
+
+  ```java
+  executorService = Executors.newScheduledThreadPool(1, new ThreadFactory() {
+  	@Override
+  	public Thread newThread(Runnable r) {
+  		final Thread t = new Thread(r, "arthas-command-execute");
+  		t.setDaemon(true);
+  		return t;
+  	}
+  });
+  ```
+
 - 创建一个TransformerManager，负责管理ClassFileTransformer
+
 
 
 
@@ -101,7 +263,24 @@ ArthasBootstrap位置arthas-core.jar中，ArthasBootstrap是一个全局单例�
 
 步骤4创建的HttpTelnetTermServer & HttpTermServer的termHandler都是TermServerTermHandler，用户输入的命令从client到server就是这个Handler负责处理，会调用到步骤创建的ShellServer.handleTerm方法
 
-按一下步骤处理
+入口处
+
+```
+public class TermServerTermHandler implements Handler<Term> {
+    private ShellServerImpl shellServer;
+
+    public TermServerTermHandler(ShellServerImpl shellServer) {
+        this.shellServer = shellServer;
+    }
+
+    @Override
+    public void handle(Term term) {
+        shellServer.handleTerm(term);
+    }
+}
+```
+
+handleTerm的处理逻辑
 
 5.1- 创建ShellImpl
 
@@ -111,17 +290,17 @@ ArthasBootstrap位置arthas-core.jar中，ArthasBootstrap是一个全局单例�
 
 5.4- 根据第一个CliToken判断是否需要生成Job来执行，exit/quit这些命令就不行在执行了
 
-5.5- 根据CliToken创建CommandProcess，这个CommandProcess里面就包含了具体的Command对象和Command的处理器Handler
+5.5- 对于需要进行处理的命令，根据CliToken解析出Command(启动Arthas的过程中，执行arthas-agent模块下Premain-Class的premain方法是命令解析器已经准备好了)，Command里面有对应的处理器Handler，创建一个ProcessImpl对象，将Command, Command对应的Handler都封装进去
 
-5.6- 将CommandProcess对象封装到Job中
+5.6- 创建Job, Job就包含5.5创建的ProcessImpl对象
 
-5.7- 创建Job对应的TimeoutTask放入ArthasBootstrap中的ScheduledExecutorService线程池中，处理超时了还未完成的Job，如果达到超时时间，Job还没处理完成的话，会执行job.terminate方法来终止
+5.7- 创建Job对应的TimeoutTask，放进ArthasBootstrap中的ScheduledExecutorService线程池中，表示对于5.6创建的Job，如果超过时间限制还未处理完成，直接terminate掉
 
-5.8- 执行Job，执行Job中CommandProcess.run方法
+5.8- 创建CommandProcess，封装了5.5中创建的ProcessImpl对象
 
-5.9- 对于确实需要执行的Job，将CommandProcess包装成CommandProcessTask，然后提交到ArthasBootstrap中的ScheduledExecutorService线程池中
+5.9- 创建CommandProcessTask对象(实现了Runnable接口)，丢进ArthasBootstrap中的ScheduledExecutorService线程池中开始执行
 
-5.10- 开始执行ProcessImpl.CommandProcessTask中run方法，就是找到Command对象对应的Handler，以watch命令为例，此时会执行AnnotatedCommandImpl的内部类ProcessHandler
+5.10- 开始执行ProcessImpl.CommandProcessTask中run方法，就是找到Command对象对应的Handler，以watch命令为例，此时会执行AnnotatedCommandImpl的内部类ProcessHandler（这里都是在Arthas启动的时候创建BuiltinCommandPack时候准备好的）
 
 5.11- 执行WatchCommand的父类EnhancerCommand.process方法，这里方法里的enhance()里面就是字节码增强的具体逻辑，核心code如下
 
